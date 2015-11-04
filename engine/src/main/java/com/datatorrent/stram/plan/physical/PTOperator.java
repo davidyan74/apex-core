@@ -99,7 +99,7 @@ public class PTOperator implements java.io.Serializable
       this.source = source;
       this.portName = portName;
       this.source.sinks.add(this);
-      this.iterationWindowOffset = 0;
+      this.iterationWindowOffset = iterationWindowOffset;
     }
 
     /**
