@@ -1007,7 +1007,7 @@ public class StreamingContainerManager implements PlanContext
       return operatorStatus.latencyMA.getAvg();
     }
     for (PTOperator.PTInput input : maxOperator.getInputs()) {
-      if (null != input.source.source && input.iterationWindowOffset > 0) {
+      if (null != input.source.source && input.delay) {
         operators.add(input.source.source);
       }
     }
@@ -1924,7 +1924,7 @@ public class StreamingContainerManager implements PlanContext
         if (!ctx.visited.contains(sinkOperator)) {
           // downstream traversal
 
-          if (sink.iterationWindowOffset > 0) {
+          if (sink.delay) {
             updateRecoveryCheckpoints(sinkOperator, ctx);
           }
         }
