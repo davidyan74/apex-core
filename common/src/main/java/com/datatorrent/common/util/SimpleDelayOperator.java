@@ -33,11 +33,16 @@ public class SimpleDelayOperator<T> implements Operator.DelayOperator
     @Override
     public void process(T tuple)
     {
-      output.emit(tuple);
+      processTuple(tuple);
     }
   };
 
   public transient DefaultOutputPort<T> output = new DefaultOutputPort<T>();
+
+  protected void processTuple(T tuple)
+  {
+    output.emit(tuple);
+  }
 
   @Override
   public void firstWindow(long windowId)
