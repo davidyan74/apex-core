@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
@@ -1894,6 +1895,19 @@ public class StreamingContainerManager implements PlanContext
 
   }
 
+  private void addVisited(PTOperator operator, UpdateCheckpointsContext ctx)
+  {
+    ctx.visited.add(operator);
+    for (PTOperator.PTOutput out : operator.getOutputs()) {
+      for (PTOperator.PTInput sink : out.sinks) {
+        PTOperator sinkOperator = sink.target;
+        if (!ctx.visited.contains(sinkOperator)) {
+          addVisited(sinkOperator, ctx);
+        }
+      }
+    }
+  }
+
   /**
    * Compute checkpoints required for a given operator instance to be recovered.
    * This is done by looking at checkpoints available for downstream dependencies first,
@@ -1923,9 +1937,12 @@ public class StreamingContainerManager implements PlanContext
           this.getLogicalPlan().getValue(LogicalPlan.STREAMING_WINDOW_SIZE_MILLIS));
       maxCheckpoint = currentWindowId;
     }
+    ctx.visited.add(operator);
 
     // DFS downstream operators
-    if (!(operator.getOperatorMeta().getOperator() instanceof Operator.DelayOperator)) {
+    if (operator.getOperatorMeta().getOperator() instanceof Operator.DelayOperator) {
+      addVisited(operator, ctx);
+    } else {
       for (PTOperator.PTOutput out : operator.getOutputs()) {
         for (PTOperator.PTInput sink : out.sinks) {
           PTOperator sinkOperator = sink.target;
@@ -1978,7 +1995,7 @@ public class StreamingContainerManager implements PlanContext
       LOG.debug("Skipping checkpoint update {} during {}", operator, operator.getState());
     }
 
-    ctx.visited.add(operator);
+    //ctx.visited.add(operator);
   }
 
   public long windowIdToMillis(long windowId)
@@ -2138,6 +2155,7 @@ public class StreamingContainerManager implements PlanContext
         PTContainer c = e.getKey();
         if (!startContainers.contains(c) && !releaseContainers.contains(c) && c.getState() != PTContainer.State.KILLED) {
           LOG.debug("scheduling undeploy {} {}", e.getKey().getExternalId(), e.getValue());
+          LOG.debug("STACK TRACE: ", new Throwable());
           for (PTOperator oper : e.getValue()) {
             oper.setState(PTOperator.State.PENDING_UNDEPLOY);
           }
