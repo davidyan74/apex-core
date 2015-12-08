@@ -266,6 +266,8 @@ public class GenericNode extends Node<Operator>
             } else {
               logger.debug("#### REGULAR #### GOT TUPLE TYPE {} from port {} window {} {} {}", t.getType(), activePortEntry.getKey(), Codec.getStringWindowId(t.getWindowId()), firstWindowMillis, windowWidthMillis);
             }
+            logger.debug("####### ActiveQueues SIZE {} {}", activeQueues.size(),
+                Codec.getStringWindowId(currentWindowId));
             switch (t.getType()) {
               case BEGIN_WINDOW:
                 if (expectingBeginWindow == totalQueues) {
@@ -429,7 +431,7 @@ public class GenericNode extends Node<Operator>
                     controlTupleCount++;
 
                     if (!activeQueues.isEmpty()) {
-                      // make sure they are all queues from iteration
+                      // make sure they are all queues from DelayOperator
                       for (Map.Entry<String, SweepableReservoir> entry : activeQueues) {
                         if (!isInputPortConnectedToDelayOperator(entry.getKey())) {
                           assert(false);
@@ -467,9 +469,62 @@ public class GenericNode extends Node<Operator>
 
               case END_STREAM:
                 activePort.remove();
-                buffers.remove();
                 // ignore delay port
-                if (!delay) {
+                logger.warn("END_STREAM {}", inputs.size());
+                if (delay) {
+                  if (t.getWindowId() == currentWindowId) {
+                    buffers.remove();
+                    for (Iterator<Entry<String, SweepableReservoir>> it = inputs.entrySet().iterator(); it.hasNext(); ) {
+                      Entry<String, SweepableReservoir> e = it.next();
+                      if (e.getValue() == activePort) {
+                        if (!descriptor.inputPorts.isEmpty()) {
+                          descriptor.inputPorts.get(e.getKey()).component.setConnected(false);
+                        }
+                        it.remove();
+
+                      /* check the deferred connection list for any new port that should be connected here */
+                        Iterator<DeferredInputConnection> dici = deferredInputConnections.iterator();
+                        while (dici.hasNext()) {
+                          DeferredInputConnection dic = dici.next();
+                          if (e.getKey().equals(dic.portname)) {
+                            connectInputPort(dic.portname, dic.reservoir);
+                            dici.remove();
+                            activeQueues.add(new AbstractMap.SimpleEntry<>(dic.portname, dic.reservoir));
+                            logger.warn("BREAKING ADDING TO QUEUE {} {}", dic.portname, activeQueues.size());
+                            break activequeue;
+                          }
+                        }
+                        logger.warn("BREAKING {}", inputs.size());
+
+                        break;
+                      }
+                    }
+                  }
+                } else {
+                  buffers.remove();
+                  logger.warn("!delay END_STREAM {}", inputs.size());
+                  if (firstResetWindow == -1) {
+                    // this is for recovery from a checkpoint for DelayOperator
+                    if (operator instanceof Operator.DelayOperator) {
+                      // if it's a DelayOperator and this is the first RESET_WINDOW, call firstWindow
+                      logger.warn("Fabricating first window {}", Codec.getStringWindowId(t.getWindowId()));
+
+                      Operator.DelayOperator delayOperator = (Operator.DelayOperator)operator;
+                      Tuple beginWindowTuple = new Tuple(MessageType.BEGIN_WINDOW, t.getWindowId());
+                      Tuple endWindowTuple = new Tuple(MessageType.END_WINDOW, t.getWindowId());
+                      for (Sink<Object> sink : outputs.values()) {
+                        logger.warn("Fabricating BEGIN WINDOW {}", Codec.getStringWindowId(t.getWindowId()));
+                        sink.put(beginWindowTuple);
+                      }
+                      delayOperator.firstWindow(t.getWindowId());
+                      for (Sink<Object> sink : outputs.values()) {
+                        logger.warn("Fabricating END WINDOW {}", Codec.getStringWindowId(t.getWindowId()));
+                        sink.put(endWindowTuple);
+                      }
+                    }
+                    firstResetWindow = t.getWindowId();
+                  }
+                  logger.warn("!delay 2 END_STREAM {}", inputs.size());
                   for (Iterator<Entry<String, SweepableReservoir>> it = inputs.entrySet().iterator(); it.hasNext(); ) {
                     Entry<String, SweepableReservoir> e = it.next();
                     if (e.getValue() == activePort) {
@@ -478,7 +533,7 @@ public class GenericNode extends Node<Operator>
                       }
                       it.remove();
 
-                    /* check the deferred connection list for any new port that should be connected here */
+                      /* check the deferred connection list for any new port that should be connected here */
                       Iterator<DeferredInputConnection> dici = deferredInputConnections.iterator();
                       while (dici.hasNext()) {
                         DeferredInputConnection dic = dici.next();
@@ -486,13 +541,16 @@ public class GenericNode extends Node<Operator>
                           connectInputPort(dic.portname, dic.reservoir);
                           dici.remove();
                           activeQueues.add(new AbstractMap.SimpleEntry<>(dic.portname, dic.reservoir));
+                          logger.warn("BREAKING ADDING TO QUEUE {} {}", dic.portname, activeQueues.size());
                           break activequeue;
                         }
                       }
+                      logger.warn("BREAKING {}", inputs.size());
 
                       break;
                     }
                   }
+                  logger.warn("!delay 3 END_STREAM {}", inputs.size());
 
                   /**
                    * We are not going to receive begin window on this ever!
@@ -505,6 +563,9 @@ public class GenericNode extends Node<Operator>
                    */
                   regularQueues--;
                   totalQueues--;
+                  logger.debug("Got here expecting {}, regular {}, total {}, active {}, inputs {}",
+                      expectingBeginWindow,
+                      regularQueues, totalQueues, activeQueues.size(), inputs.size());
 
                   boolean break_activequeue = false;
                   if (regularQueues == 0) {
@@ -556,10 +617,11 @@ public class GenericNode extends Node<Operator>
                     }
                   }
 
-                /*
-                 * Since we were waiting for a reset tuple on this stream, we should not any longer.
-                 */
+                  /*
+                   * Since we were waiting for a reset tuple on this stream, we should not any longer.
+                   */
                   if (tuple != null) {
+                    logger.debug("PUTTING {} {} TO SINKS", tuple.getType(), Codec.getStringWindowId(tuple.getWindowId()));
                     for (int s = sinks.length; s-- > 0; ) {
                       sinks[s].put(tuple);
                     }

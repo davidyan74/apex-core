@@ -88,10 +88,12 @@ public class WindowIdActivatedReservoir implements SweepableReservoir
     while ((t = reservoir.sweep()) != null) {
       if (t.getType() == MessageType.BEGIN_WINDOW && t.getWindowId() > windowId) {
         reservoir.setSink(sink);
+        logger.debug("Returning EndStream {}", windowId);
         return (est = new EndStreamTuple(windowId));
       }
       reservoir.remove();
     }
+    logger.debug("Returning NULL {}", windowId);
 
     return null;
   }
