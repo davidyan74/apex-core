@@ -340,7 +340,6 @@ public class PhysicalPlan implements Serializable
       }
 
       if (upstreamDeployed) {
-        System.out.println("##########3 Add logical " + n);
         addLogicalOperator(n);
       }
     }
@@ -954,7 +953,7 @@ public class PhysicalPlan implements Serializable
             }
           }
         }
-      } else if (sourceMapping != null) { // TODO: DOUBLE CHECK THIS
+      } else if (sourceMapping != null) {
         StreamMapping ug = sourceMapping.outputStreams.get(ipm.getValue().getSource());
         if (ug == null) {
           ug = new StreamMapping(ipm.getValue(), this);
