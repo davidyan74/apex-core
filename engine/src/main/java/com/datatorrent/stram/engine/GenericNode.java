@@ -251,10 +251,12 @@ public class GenericNode extends Node<Operator>
           boolean needResetWindow = false;
           if (t != null) {
             boolean delay = (operator instanceof Operator.DelayOperator);
-            long windowAhead = WindowGenerator.getAheadWindowId(t.getWindowId(), firstWindowMillis, windowWidthMillis, 1);
-
-            if (WindowGenerator.getBaseSecondsFromWindowId(windowAhead) > t.getBaseSeconds()) {
-              needResetWindow = true;
+            long windowAhead = 0;
+            if (delay) {
+              windowAhead = WindowGenerator.getAheadWindowId(t.getWindowId(), firstWindowMillis, windowWidthMillis, 1);
+              if (WindowGenerator.getBaseSecondsFromWindowId(windowAhead) > t.getBaseSeconds()) {
+                needResetWindow = true;
+              }
             }
             switch (t.getType()) {
               case BEGIN_WINDOW:

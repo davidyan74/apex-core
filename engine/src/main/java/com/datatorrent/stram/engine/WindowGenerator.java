@@ -314,6 +314,7 @@ public class WindowGenerator extends MuxReservoir implements Stream, Runnable
     long baseMillis = (windowId >> 32) * 1000;
     long diff = baseMillis - firstWindowMillis;
     long baseChangeInterval = windowWidthMillis * (WindowGenerator.MAX_WINDOW_ID + 1);
+    assert (baseChangeInterval > 0);
     long multiplier = diff / baseChangeInterval;
     if (diff % baseChangeInterval > 0) {
       multiplier++;
