@@ -203,6 +203,7 @@ public class GenericNode extends Node<Operator>
 
   private boolean isInputPortConnectedToDelayOperator(String portName)
   {
+
     Operators.PortContextPair<InputPort<?>> pcPair = descriptor.inputPorts.get(portName);
     if (pcPair == null || pcPair.context == null) {
       return false;
@@ -240,6 +241,7 @@ public class GenericNode extends Node<Operator>
 
     TupleTracker tracker;
     LinkedList<TupleTracker> resetTupleTracker = new LinkedList<TupleTracker>();
+    logger.debug("#################### IN RUN");
     try {
       do {
         Iterator<Map.Entry<String, SweepableReservoir>> buffers = activeQueues.iterator();
@@ -250,6 +252,8 @@ public class GenericNode extends Node<Operator>
           Tuple t = activePort.sweep();
           boolean needResetWindow = false;
           if (t != null) {
+            logger.debug("#################### GOT TUPLE {} {} {}", activePortEntry.getKey(), t.getType(),
+                Codec.getStringWindowId(t.getWindowId()));
             boolean delay = (operator instanceof Operator.DelayOperator);
             long windowAhead = 0;
             if (delay) {
