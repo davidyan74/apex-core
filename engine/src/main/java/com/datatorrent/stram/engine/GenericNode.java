@@ -252,7 +252,6 @@ public class GenericNode extends Node<Operator>
           Map.Entry<String, SweepableReservoir> activePortEntry = buffers.next();
           SweepableReservoir activePort = activePortEntry.getValue();
           Tuple t = activePort.sweep();
-          boolean needResetWindow = false;
           if (t != null) {
             boolean delay = (operator instanceof Operator.DelayOperator);
             if (isInputPortConnectedToDelayOperator(activePortEntry.getKey())) {
@@ -265,9 +264,6 @@ public class GenericNode extends Node<Operator>
             long windowAhead = 0;
             if (delay) {
               windowAhead = WindowGenerator.getAheadWindowId(t.getWindowId(), firstWindowMillis, windowWidthMillis, 1);
-              if (WindowGenerator.getBaseSecondsFromWindowId(windowAhead) > t.getBaseSeconds()) {
-                needResetWindow = true;
-              }
             }
             switch (t.getType()) {
               case BEGIN_WINDOW:
@@ -277,7 +273,7 @@ public class GenericNode extends Node<Operator>
                   receivedEndWindow = 0;
                   currentWindowId = t.getWindowId();
                   if (delay) {
-                    if (needResetWindow) {
+                    if (WindowGenerator.getBaseSecondsFromWindowId(windowAhead) > t.getBaseSeconds()) {
                       // Buffer server code strips out the base seconds from BEGIN_WINDOW and END_WINDOW tuples for
                       // serialization optimization.  That's why we need a reset window here to tell the buffer
                       // server we are having a new baseSeconds now.
@@ -285,6 +281,7 @@ public class GenericNode extends Node<Operator>
                       for (int s = sinks.length; s-- > 0; ) {
                         sinks[s].put(resetWindowTuple);
                       }
+                      controlTupleCount++;
                     }
                     t.setWindowId(windowAhead);
                   }
@@ -405,8 +402,7 @@ public class GenericNode extends Node<Operator>
                 buffers.remove();
                 int baseSeconds = t.getBaseSeconds();
                 tracker = null;
-                for (Iterator<TupleTracker> trackerIterator = resetTupleTracker.iterator(); trackerIterator
-                    .hasNext(); ) {
+                for (Iterator<TupleTracker> trackerIterator = resetTupleTracker.iterator(); trackerIterator.hasNext(); ) {
                   tracker = trackerIterator.next();
                   if (tracker.tuple.getBaseSeconds() == baseSeconds) {
                     break;
@@ -459,6 +455,7 @@ public class GenericNode extends Node<Operator>
                       for (int s = sinks.length; s-- > 0; ) {
                         sinks[s].put(t);
                       }
+                      controlTupleCount++;
                       // if it's a DelayOperator and this is the first RESET_WINDOW (start) or END_STREAM
                       // (recovery), fabricate the first window
                       fabricateFirstWindow((Operator.DelayOperator)operator, windowAhead);
@@ -678,10 +675,12 @@ public class GenericNode extends Node<Operator>
     for (Sink<Object> sink : outputs.values()) {
       sink.put(beginWindowTuple);
     }
+    controlTupleCount++;
     delayOperator.firstWindow();
     for (Sink<Object> sink : outputs.values()) {
       sink.put(endWindowTuple);
     }
+    controlTupleCount++;
   }
 
   /**
