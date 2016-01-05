@@ -254,9 +254,14 @@ public class GenericNode extends Node<Operator>
           Tuple t = activePort.sweep();
           boolean needResetWindow = false;
           if (t != null) {
-            logger.debug("#################### GOT TUPLE {} {} {}", activePortEntry.getKey(), t.getType(),
-                Codec.getStringWindowId(t.getWindowId()));
             boolean delay = (operator instanceof Operator.DelayOperator);
+            if (isInputPortConnectedToDelayOperator(activePortEntry.getKey())) {
+              logger.debug("#################### GOT TUPLE {} {} {}", activePortEntry.getKey(), t.getType(),
+                  Codec.getStringWindowId(t.getWindowId()));
+            } else {
+              logger.debug("#################### GOT TUPLE FROM DELAY {} {} {}", activePortEntry.getKey(), t.getType(),
+                  Codec.getStringWindowId(t.getWindowId()));
+            }
             long windowAhead = 0;
             if (delay) {
               windowAhead = WindowGenerator.getAheadWindowId(t.getWindowId(), firstWindowMillis, windowWidthMillis, 1);
@@ -669,6 +674,7 @@ public class GenericNode extends Node<Operator>
   {
     Tuple beginWindowTuple = new Tuple(MessageType.BEGIN_WINDOW, windowAhead);
     Tuple endWindowTuple = new Tuple(MessageType.END_WINDOW, windowAhead);
+    logger.debug("##### Fabricating first window {}", Codec.getStringWindowId(windowAhead));
     for (Sink<Object> sink : outputs.values()) {
       sink.put(beginWindowTuple);
     }

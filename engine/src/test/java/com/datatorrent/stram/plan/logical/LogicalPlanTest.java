@@ -234,11 +234,6 @@ public class LogicalPlanTest
     public transient DefaultOutputPort<Long> output = new DefaultOutputPort<>();
 
     @Override
-    public void setup(OperatorContext context)
-    {
-    }
-
-    @Override
     public void beginWindow(long windowId)
     {
       if (simulateFailureWindows > 0 && ((simulateFailureAfterCommit && committed) || !simulateFailureAfterCommit) &&
@@ -339,6 +334,89 @@ public class LogicalPlanTest
     Assert.assertArrayEquals(new Long[]{1L, 1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L},
         FibonacciOperator.results.subList(0, 10).toArray());
   }
+
+  public static class StdoutOperator extends BaseOperator
+  {
+    public final transient DefaultInputPort<Object> in = new DefaultInputPort<Object>()
+    {
+      @Override
+      @SuppressWarnings("UseOfSystemOutOrSystemErr")
+      public void process(Object t)
+      {
+        System.out.println(t.toString());
+      }
+    };
+    private long windowId;
+
+    @Override
+    public void beginWindow(long windowId)
+    {
+      System.out.println("BEGIN WINDOW " + this.windowId + "->" + windowId);
+      this.windowId = windowId;
+    }
+
+    @Override
+    public void endWindow()
+    {
+      System.out.println("END WINDOW");
+      windowId = 1234;
+    }
+
+    @Override
+    public void setup(OperatorContext context)
+    {
+      System.out.println("WINDOWID => " + windowId);
+    }
+  }
+
+  public static class RandomNumberGenerator extends BaseOperator implements InputOperator
+  {
+    private transient Random r = new Random();
+    public final transient DefaultOutputPort<Long> out = new DefaultOutputPort<Long>();
+
+    @Override
+    public void emitTuples()
+    {
+      out.emit(r.nextLong());
+    }
+
+  }
+
+  @Test
+  public void testRecovery() throws Exception
+  {
+    LogicalPlan dag = new LogicalPlan();
+
+    TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
+    FibonacciOperator fib = dag.addOperator("FIB", FibonacciOperator.class);
+    StdoutOperator output = dag.addOperator("console", StdoutOperator.class);
+    RandomNumberGenerator random = dag.addOperator("random", RandomNumberGenerator.class);
+    fib.setSimulateFailureWindows(3, true);
+    //opDelay.setSimulateFailureWindows();
+
+    dag.addStream("dummy_to_operator", dummyInput.outport, fib.dummyInputPort);
+    dag.addStream("random_to_operator", random.out, fib.input);
+    dag.addStream("operator_to_delay", fib.output, output.in);
+    dag.getAttributes().put(LogicalPlan.CHECKPOINT_WINDOW_COUNT, 2);
+    dag.getAttributes().put(LogicalPlan.STREAMING_WINDOW_SIZE_MILLIS, 300);
+    FibonacciOperator.results.clear();
+    FibonacciOperator.failureSimulated = false;
+    final StramLocalCluster localCluster = new StramLocalCluster(dag);
+    localCluster.runAsync();
+    StramTestSupport.awaitCompletion(new StramTestSupport.WaitCondition()
+    {
+      @Override
+      public boolean isComplete()
+      {
+        return FibonacciOperator.results.size() >= 1000;
+      }
+    }, 30000);
+
+    System.out.println("RESULT: " + FibonacciOperator.results);
+    Assert.assertArrayEquals(new Long[]{1L, 1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L},
+        FibonacciOperator.results.subList(0, 10).toArray());
+  }
+
 
   public static class ValidationOperator extends BaseOperator {
     public final transient DefaultOutputPort<Object> goodOutputPort = new DefaultOutputPort<Object>();

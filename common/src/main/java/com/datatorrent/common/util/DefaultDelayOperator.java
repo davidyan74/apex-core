@@ -21,6 +21,10 @@ package com.datatorrent.common.util;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.datatorrent.api.Context;
 import com.datatorrent.api.DefaultInputPort;
 import com.datatorrent.api.DefaultOutputPort;
 import com.datatorrent.api.Operator;
@@ -35,7 +39,7 @@ import com.datatorrent.api.Operator;
  * This DelayOperator provides no data loss during recovery, but it incurs a run-time cost per tuple, and all tuples
  * of the checkpoint window will be part of the checkpoint state.
  */
-public class DefaultDelayOperator<T> extends BaseOperator implements Operator.DelayOperator
+public class DefaultDelayOperator<T> extends BaseOperator implements Operator.DelayOperator, Operator.CheckpointListener
 {
   public transient DefaultInputPort<T> input = new DefaultInputPort<T>()
   {
@@ -50,25 +54,59 @@ public class DefaultDelayOperator<T> extends BaseOperator implements Operator.De
 
   protected List<T> lastWindowTuples = new ArrayList<>();
 
+  private long windowId;
+
   protected void processTuple(T tuple)
   {
     lastWindowTuples.add(tuple);
+    LOG.debug("#### EMITTING {} for window {}", tuple, Long.toHexString(this.windowId));
     output.emit(tuple);
   }
 
   @Override
   public void beginWindow(long windowId)
   {
+    LOG.debug("#### BEGIN WINDOW {} -> {}", Long.toHexString(this.windowId), Long.toHexString(windowId));
+    this.windowId = windowId;
     lastWindowTuples.clear();
+  }
+
+  @Override
+  public void endWindow()
+  {
+    LOG.debug("#### END WINDOW {} {}", Long.toHexString(this.windowId), lastWindowTuples);
+    this.windowId = 12345;
   }
 
   @Override
   public void firstWindow()
   {
     for (T tuple : lastWindowTuples) {
+      LOG.debug("##### FIRST WINDOW EMIT {} {}", Long.toHexString(windowId), tuple);
       output.emit(tuple);
     }
   }
+
+  @Override
+  public void setup(Context.OperatorContext context)
+  {
+    super.setup(context);
+    LOG.debug("#### IN SETUP FOR DELAY OPERATOR {} {}", Long.toHexString(windowId), lastWindowTuples);
+  }
+
+  @Override
+  public void checkpointed(long windowId)
+  {
+    LOG.debug("#### CHECKPOINTED {}", Long.toHexString(windowId));
+  }
+
+  @Override
+  public void committed(long windowId)
+  {
+
+  }
+
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultDelayOperator.class);
 
 }
 
