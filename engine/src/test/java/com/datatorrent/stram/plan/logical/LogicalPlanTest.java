@@ -32,7 +32,6 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 
-import com.datatorrent.stram.StramLocalCluster;
 import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import com.google.common.collect.Maps;
@@ -43,8 +42,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 import com.datatorrent.common.partitioner.StatelessPartitioner;
-import com.datatorrent.common.util.DefaultDelayOperator;
 import com.datatorrent.api.*;
+import com.datatorrent.api.Context.DAGContext;
 import com.datatorrent.api.Context.OperatorContext;
 import com.datatorrent.api.Context.PortContext;
 import com.datatorrent.api.DAG.Locality;
@@ -56,368 +55,65 @@ import com.datatorrent.stram.engine.GenericTestOperator;
 import com.datatorrent.stram.engine.TestGeneratorInputOperator;
 import com.datatorrent.stram.engine.TestNonOptionalOutportInputOperator;
 import com.datatorrent.stram.engine.TestOutputOperator;
+import com.datatorrent.stram.plan.logical.LogicalPlan;
 import com.datatorrent.stram.plan.logical.LogicalPlan.OperatorMeta;
 import com.datatorrent.stram.plan.logical.LogicalPlan.StreamMeta;
-import com.datatorrent.stram.support.StramTestSupport;
 import com.datatorrent.stram.support.StramTestSupport.MemoryStorageAgent;
 import com.datatorrent.stram.support.StramTestSupport.RegexMatcher;
 
-public class LogicalPlanTest
-{
+public class LogicalPlanTest {
 
   @Test
-  public void testCycleDetection()
-  {
-    LogicalPlan dag = new LogicalPlan();
+  public void testCycleDetection() {
+     LogicalPlan dag = new LogicalPlan();
 
-    //NodeConf operator1 = b.getOrAddNode("operator1");
-    GenericTestOperator operator2 = dag.addOperator("operator2", GenericTestOperator.class);
-    GenericTestOperator operator3 = dag.addOperator("operator3", GenericTestOperator.class);
-    GenericTestOperator operator4 = dag.addOperator("operator4", GenericTestOperator.class);
-    //NodeConf operator5 = b.getOrAddNode("operator5");
-    //NodeConf operator6 = b.getOrAddNode("operator6");
-    GenericTestOperator operator7 = dag.addOperator("operator7", GenericTestOperator.class);
+     //NodeConf operator1 = b.getOrAddNode("operator1");
+     GenericTestOperator operator2 = dag.addOperator("operator2", GenericTestOperator.class);
+     GenericTestOperator operator3 = dag.addOperator("operator3", GenericTestOperator.class);
+     GenericTestOperator operator4 = dag.addOperator("operator4", GenericTestOperator.class);
+     //NodeConf operator5 = b.getOrAddNode("operator5");
+     //NodeConf operator6 = b.getOrAddNode("operator6");
+     GenericTestOperator operator7 = dag.addOperator("operator7", GenericTestOperator.class);
 
-    // strongly connect n2-n3-n4-n2
-    dag.addStream("n2n3", operator2.outport1, operator3.inport1);
+     // strongly connect n2-n3-n4-n2
+     dag.addStream("n2n3", operator2.outport1, operator3.inport1);
 
-    dag.addStream("n3n4", operator3.outport1, operator4.inport1);
+     dag.addStream("n3n4", operator3.outport1, operator4.inport1);
 
-    dag.addStream("n4n2", operator4.outport1, operator2.inport1);
+     dag.addStream("n4n2", operator4.outport1, operator2.inport1);
 
-    // self referencing operator cycle
-    StreamMeta n7n7 = dag.addStream("n7n7", operator7.outport1, operator7.inport1);
-    try {
-      n7n7.addSink(operator7.inport1);
-      fail("cannot add to stream again");
-    } catch (Exception e) {
-      // expected, stream can have single input/output only
-    }
+     // self referencing operator cycle
+     StreamMeta n7n7 = dag.addStream("n7n7", operator7.outport1, operator7.inport1);
+     try {
+       n7n7.addSink(operator7.inport1);
+       fail("cannot add to stream again");
+     } catch (Exception e) {
+       // expected, stream can have single input/output only
+     }
 
-    List<List<String>> cycles = new ArrayList<List<String>>();
-    dag.findStronglyConnected(dag.getMeta(operator7), cycles);
-    assertEquals("operator self reference", 1, cycles.size());
-    assertEquals("operator self reference", 1, cycles.get(0).size());
-    assertEquals("operator self reference", dag.getMeta(operator7).getName(), cycles.get(0).get(0));
+     List<List<String>> cycles = new ArrayList<List<String>>();
+     dag.findStronglyConnected(dag.getMeta(operator7), cycles);
+     assertEquals("operator self reference", 1, cycles.size());
+     assertEquals("operator self reference", 1, cycles.get(0).size());
+     assertEquals("operator self reference", dag.getMeta(operator7).getName(), cycles.get(0).get(0));
 
-    // 3 operator cycle
-    cycles.clear();
-    dag.findStronglyConnected(dag.getMeta(operator4), cycles);
-    assertEquals("3 operator cycle", 1, cycles.size());
-    assertEquals("3 operator cycle", 3, cycles.get(0).size());
-    assertTrue("operator2", cycles.get(0).contains(dag.getMeta(operator2).getName()));
-    assertTrue("operator3", cycles.get(0).contains(dag.getMeta(operator3).getName()));
-    assertTrue("operator4", cycles.get(0).contains(dag.getMeta(operator4).getName()));
+     // 3 operator cycle
+     cycles.clear();
+     dag.findStronglyConnected(dag.getMeta(operator4), cycles);
+     assertEquals("3 operator cycle", 1, cycles.size());
+     assertEquals("3 operator cycle", 3, cycles.get(0).size());
+     assertTrue("operator2", cycles.get(0).contains(dag.getMeta(operator2).getName()));
+     assertTrue("operator3", cycles.get(0).contains(dag.getMeta(operator3).getName()));
+     assertTrue("operator4", cycles.get(0).contains(dag.getMeta(operator4).getName()));
 
-    try {
-      dag.validate();
-      fail("validation should fail");
-    } catch (ValidationException e) {
-      // expected
-    }
-
-  }
-
-  @Test
-  public void testInvalidDelayDetection()
-  {
-    LogicalPlan dag = new LogicalPlan();
-
-    GenericTestOperator opB = dag.addOperator("B", GenericTestOperator.class);
-    GenericTestOperator opC = dag.addOperator("C", GenericTestOperator.class);
-    GenericTestOperator opD = dag.addOperator("D", GenericTestOperator.class);
-    DefaultDelayOperator opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-
-    dag.addStream("BtoC", opB.outport1, opC.inport1);
-    dag.addStream("CtoD", opC.outport1, opD.inport1);
-    dag.addStream("CtoDelay", opC.outport2, opDelay.input);
-    dag.addStream("DelayToD", opDelay.output, opD.inport2);
-
-    List<List<String>> invalidDelays = new ArrayList<>();
-    dag.findInvalidDelays(dag.getMeta(opB), invalidDelays);
-    assertEquals("operator invalid delay", 1, invalidDelays.size());
-
-    try {
-      dag.validate();
-      fail("validation should fail");
-    } catch (ValidationException e) {
-      // expected
-    }
-
-    dag = new LogicalPlan();
-
-    opB = dag.addOperator("B", GenericTestOperator.class);
-    opC = dag.addOperator("C", GenericTestOperator.class);
-    opD = dag.addOperator("D", GenericTestOperator.class);
-    opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-    dag.setAttribute(opDelay, OperatorContext.APPLICATION_WINDOW_COUNT, 2);
-    dag.addStream("BtoC", opB.outport1, opC.inport1);
-    dag.addStream("CtoD", opC.outport1, opD.inport1);
-    dag.addStream("CtoDelay", opC.outport2, opDelay.input);
-    dag.addStream("DelayToC", opDelay.output, opC.inport2);
-
-    invalidDelays = new ArrayList<>();
-    dag.findInvalidDelays(dag.getMeta(opB), invalidDelays);
-    assertEquals("operator invalid delay", 1, invalidDelays.size());
-
-    try {
-      dag.validate();
-      fail("validation should fail");
-    } catch (ValidationException e) {
-      // expected
-    }
-
-    dag = new LogicalPlan();
-
-    opB = dag.addOperator("B", GenericTestOperator.class);
-    opC = dag.addOperator("C", GenericTestOperator.class);
-    opD = dag.addOperator("D", GenericTestOperator.class);
-    opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-    dag.addStream("BtoC", opB.outport1, opC.inport1);
-    dag.addStream("CtoD", opC.outport1, opD.inport1);
-    dag.addStream("CtoDelay", opC.outport2, opDelay.input).setLocality(Locality.THREAD_LOCAL);
-    dag.addStream("DelayToC", opDelay.output, opC.inport2).setLocality(Locality.THREAD_LOCAL);
-
-    try {
-      dag.validate();
-      fail("validation should fail");
-    } catch (ValidationException e) {
-      // expected
-    }
-  }
-
-  @Test
-  public void testValidDelay()
-  {
-    LogicalPlan dag = new LogicalPlan();
-
-    TestGeneratorInputOperator opA = dag.addOperator("A", TestGeneratorInputOperator.class);
-    GenericTestOperator opB = dag.addOperator("B", GenericTestOperator.class);
-    GenericTestOperator opC = dag.addOperator("C", GenericTestOperator.class);
-    GenericTestOperator opD = dag.addOperator("D", GenericTestOperator.class);
-    DefaultDelayOperator opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-
-    dag.addStream("AtoB", opA.outport, opB.inport1);
-    dag.addStream("BtoC", opB.outport1, opC.inport1);
-    dag.addStream("CtoD", opC.outport1, opD.inport1);
-    dag.addStream("CtoDelay", opC.outport2, opDelay.input);
-    dag.addStream("DelayToB", opDelay.output, opB.inport2);
-    dag.validate();
-  }
-
-  public static class FibonacciOperator extends BaseOperator implements Operator.CheckpointListener
-  {
-    public static List<Long> results = new ArrayList<>();
-    public long currentNumber = 1;
-    private transient long tempNum;
-    private boolean committed = false;
-    private int simulateFailureWindows = 0;
-    private boolean simulateFailureAfterCommit = false;
-    private int windowCount = 0;
-    private static boolean failureSimulated = false;
-
-    public transient DefaultInputPort<Object> dummyInputPort = new DefaultInputPort<Object>()
-    {
-      @Override
-      public void process(Object tuple)
-      {
-      }
-    };
-    public transient DefaultInputPort<Long> input = new DefaultInputPort<Long>()
-    {
-      @Override
-      public void process(Long tuple)
-      {
-        tempNum = tuple;
-        System.out.println("########################### GOT DATA TUPLE " + tuple);
-      }
-    };
-    public transient DefaultOutputPort<Long> output = new DefaultOutputPort<>();
-
-    @Override
-    public void beginWindow(long windowId)
-    {
-      if (simulateFailureWindows > 0 && ((simulateFailureAfterCommit && committed) || !simulateFailureAfterCommit) &&
-          !failureSimulated) {
-        if (windowCount++ == simulateFailureWindows) {
-          System.out.println("########################### windowCount " + windowCount + " " + simulateFailureWindows);
-          failureSimulated = true;
-          throw new RuntimeException("simulating failure");
-        }
-      }
-    }
-
-    @Override
-    public void endWindow()
-    {
-      output.emit(currentNumber);
-      results.add(currentNumber);
-      currentNumber += tempNum;
-    }
-
-    @Override
-    public void checkpointed(long windowId)
-    {
-
-    }
-
-    @Override
-    public void committed(long windowId)
-    {
-      committed = true;
-    }
-
-    public void setSimulateFailureWindows(int windows, boolean afterCommit)
-    {
-      this.simulateFailureAfterCommit = afterCommit;
-      this.simulateFailureWindows = windows;
-    }
-  }
-
-  @Test
-  public void testFibonacci() throws Exception
-  {
-    LogicalPlan dag = new LogicalPlan();
-
-    TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
-    FibonacciOperator fib = dag.addOperator("FIB", FibonacciOperator.class);
-    DefaultDelayOperator opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-
-    dag.addStream("dummy_to_operator", dummyInput.outport, fib.dummyInputPort);
-    dag.addStream("operator_to_delay", fib.output, opDelay.input);
-    dag.addStream("delay_to_operator", opDelay.output, fib.input);
-    FibonacciOperator.results.clear();
-    final StramLocalCluster localCluster = new StramLocalCluster(dag);
-    localCluster.runAsync();
-    StramTestSupport.awaitCompletion(new StramTestSupport.WaitCondition()
-    {
-      @Override
-      public boolean isComplete()
-      {
-        return FibonacciOperator.results.size() >= 10;
-      }
-    }, 10000);
-    Assert.assertArrayEquals(new Long[]{1L, 1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L},
-        FibonacciOperator.results.subList(0, 10).toArray());
-  }
-
-  @Test
-  public void testFibonacciRecovery() throws Exception
-  {
-    LogicalPlan dag = new LogicalPlan();
-
-    TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
-    FibonacciOperator fib = dag.addOperator("FIB", FibonacciOperator.class);
-    DefaultDelayOperator opDelay = dag.addOperator("opDelay", DefaultDelayOperator.class);
-
-    fib.setSimulateFailureWindows(3, true);
-    //opDelay.setSimulateFailureWindows();
-
-    dag.addStream("dummy_to_operator", dummyInput.outport, fib.dummyInputPort);
-    dag.addStream("operator_to_delay", fib.output, opDelay.input);
-    dag.addStream("delay_to_operator", opDelay.output, fib.input);
-    dag.getAttributes().put(LogicalPlan.CHECKPOINT_WINDOW_COUNT, 2);
-    dag.getAttributes().put(LogicalPlan.STREAMING_WINDOW_SIZE_MILLIS, 300);
-    FibonacciOperator.results.clear();
-    FibonacciOperator.failureSimulated = false;
-    final StramLocalCluster localCluster = new StramLocalCluster(dag);
-    localCluster.runAsync();
-    StramTestSupport.awaitCompletion(new StramTestSupport.WaitCondition()
-    {
-      @Override
-      public boolean isComplete()
-      {
-        return FibonacciOperator.results.size() >= 50;
-      }
-    }, 10000);
-
-    System.out.println("RESULT: " + FibonacciOperator.results);
-    Assert.assertArrayEquals(new Long[]{1L, 1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L},
-        FibonacciOperator.results.subList(0, 10).toArray());
-  }
-
-  public static class StdoutOperator extends BaseOperator
-  {
-    public final transient DefaultInputPort<Object> in = new DefaultInputPort<Object>()
-    {
-      @Override
-      @SuppressWarnings("UseOfSystemOutOrSystemErr")
-      public void process(Object t)
-      {
-        System.out.println(t.toString());
-      }
-    };
-    private long windowId;
-
-    @Override
-    public void beginWindow(long windowId)
-    {
-      System.out.println("BEGIN WINDOW " + this.windowId + "->" + windowId);
-      this.windowId = windowId;
-    }
-
-    @Override
-    public void endWindow()
-    {
-      System.out.println("END WINDOW");
-      windowId = 1234;
-    }
-
-    @Override
-    public void setup(OperatorContext context)
-    {
-      System.out.println("WINDOWID => " + windowId);
-    }
-  }
-
-  public static class RandomNumberGenerator extends BaseOperator implements InputOperator
-  {
-    private transient Random r = new Random();
-    public final transient DefaultOutputPort<Long> out = new DefaultOutputPort<Long>();
-
-    @Override
-    public void emitTuples()
-    {
-      out.emit(r.nextLong());
-    }
+     try {
+       dag.validate();
+       fail("validation should fail");
+     } catch (ValidationException e) {
+       // expected
+     }
 
   }
-
-  @Test
-  public void testRecovery() throws Exception
-  {
-    LogicalPlan dag = new LogicalPlan();
-
-    TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
-    FibonacciOperator fib = dag.addOperator("FIB", FibonacciOperator.class);
-    StdoutOperator output = dag.addOperator("console", StdoutOperator.class);
-    RandomNumberGenerator random = dag.addOperator("random", RandomNumberGenerator.class);
-    fib.setSimulateFailureWindows(3, true);
-    //opDelay.setSimulateFailureWindows();
-
-    dag.addStream("dummy_to_operator", dummyInput.outport, fib.dummyInputPort);
-    dag.addStream("random_to_operator", random.out, fib.input);
-    dag.addStream("operator_to_delay", fib.output, output.in);
-    dag.getAttributes().put(LogicalPlan.CHECKPOINT_WINDOW_COUNT, 2);
-    dag.getAttributes().put(LogicalPlan.STREAMING_WINDOW_SIZE_MILLIS, 300);
-    FibonacciOperator.results.clear();
-    FibonacciOperator.failureSimulated = false;
-    final StramLocalCluster localCluster = new StramLocalCluster(dag);
-    localCluster.runAsync();
-    StramTestSupport.awaitCompletion(new StramTestSupport.WaitCondition()
-    {
-      @Override
-      public boolean isComplete()
-      {
-        return FibonacciOperator.results.size() >= 1000;
-      }
-    }, 30000);
-
-    System.out.println("RESULT: " + FibonacciOperator.results);
-    Assert.assertArrayEquals(new Long[]{1L, 1L, 2L, 3L, 5L, 8L, 13L, 21L, 34L, 55L},
-        FibonacciOperator.results.subList(0, 10).toArray());
-  }
-
 
   public static class ValidationOperator extends BaseOperator {
     public final transient DefaultOutputPort<Object> goodOutputPort = new DefaultOutputPort<Object>();
