@@ -229,6 +229,7 @@ public class LogicalPlanTest
       public void process(Long tuple)
       {
         tempNum = tuple;
+        System.out.println("########################### GOT DATA TUPLE " + tuple);
       }
     };
     public transient DefaultOutputPort<Long> output = new DefaultOutputPort<>();

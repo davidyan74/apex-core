@@ -356,7 +356,9 @@ public abstract class Node<OPERATOR extends Operator> implements Component<Opera
 
   protected void emitEndWindow()
   {
-    EndWindowTuple ewt = new EndWindowTuple(currentWindowId);
+    long windowId = (operator instanceof Operator.DelayOperator) ?
+        WindowGenerator.getAheadWindowId(currentWindowId, firstWindowMillis, windowWidthMillis, 1) : currentWindowId;
+    EndWindowTuple ewt = new EndWindowTuple(windowId);
     for (int s = sinks.length; s-- > 0; ) {
       sinks[s].put(ewt);
     }
@@ -487,6 +489,7 @@ public abstract class Node<OPERATOR extends Operator> implements Component<Opera
 
   void checkpoint(long windowId)
   {
+    logger.debug("##### CHECKPOINTING {}...", Codec.getStringWindowId(windowId));
     if (!context.stateless) {
       StorageAgent ba = context.getValue(OperatorContext.STORAGE_AGENT);
       if (ba != null) {

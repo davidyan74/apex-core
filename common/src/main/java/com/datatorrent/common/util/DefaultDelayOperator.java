@@ -75,7 +75,6 @@ public class DefaultDelayOperator<T> extends BaseOperator implements Operator.De
   public void endWindow()
   {
     LOG.debug("#### END WINDOW {} {}", Long.toHexString(this.windowId), lastWindowTuples);
-    this.windowId = 12345;
   }
 
   @Override
