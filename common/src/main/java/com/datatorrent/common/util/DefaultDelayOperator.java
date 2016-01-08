@@ -39,7 +39,7 @@ import com.datatorrent.api.Operator;
  * This DelayOperator provides no data loss during recovery, but it incurs a run-time cost per tuple, and all tuples
  * of the checkpoint window will be part of the checkpoint state.
  */
-public class DefaultDelayOperator<T> extends BaseOperator implements Operator.DelayOperator, Operator.CheckpointListener
+public class DefaultDelayOperator<T> extends BaseOperator implements Operator.DelayOperator
 {
   public transient DefaultInputPort<T> input = new DefaultInputPort<T>()
   {
@@ -91,18 +91,6 @@ public class DefaultDelayOperator<T> extends BaseOperator implements Operator.De
   {
     super.setup(context);
     LOG.debug("#### IN SETUP FOR DELAY OPERATOR {} {}", Long.toHexString(windowId), lastWindowTuples);
-  }
-
-  @Override
-  public void checkpointed(long windowId)
-  {
-    LOG.debug("#### CHECKPOINTED {}", Long.toHexString(windowId));
-  }
-
-  @Override
-  public void committed(long windowId)
-  {
-
   }
 
   private static final Logger LOG = LoggerFactory.getLogger(DefaultDelayOperator.class);

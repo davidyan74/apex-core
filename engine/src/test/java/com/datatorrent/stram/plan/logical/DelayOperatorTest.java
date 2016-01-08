@@ -31,9 +31,9 @@ import javax.validation.ValidationException;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.FixMethodOrder;
 import org.junit.Test;
-import org.junit.runners.MethodSorters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.datatorrent.api.Context;
 import com.datatorrent.api.DAG;
@@ -45,7 +45,6 @@ import com.datatorrent.common.util.DefaultDelayOperator;
 import com.datatorrent.stram.StramLocalCluster;
 import com.datatorrent.stram.engine.GenericTestOperator;
 import com.datatorrent.stram.engine.TestGeneratorInputOperator;
-import com.datatorrent.stram.support.StramTestSupport;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -180,6 +179,7 @@ public class DelayOperatorTest
       @Override
       public void process(Long tuple)
       {
+        LOG.debug("#### FIB GOT DATA TUPLE: {}", tuple);
         tempNum = tuple;
       }
     };
@@ -191,6 +191,10 @@ public class DelayOperatorTest
       output.emit(currentNumber);
       results.add(currentNumber);
       currentNumber += tempNum;
+      if (currentNumber < 0) {
+        // overflow
+        currentNumber = 1;
+      }
     }
 
   }
@@ -328,7 +332,7 @@ public class DelayOperatorTest
       }
     });
     localCluster.run(60000);
-    System.out.println("RESULT: " + FailableFibonacciOperator.results);
+    LOG.debug("RESULT: {}", FibonacciOperator.results);
     Assert.assertTrue("failure should be invoked", FailableFibonacciOperator.failureSimulated);
     Assert.assertArrayEquals(Arrays.copyOfRange(new TreeSet<>(Arrays.asList(FIBONACCI_NUMBERS)).toArray(), 0, 20),
         Arrays.copyOfRange(new TreeSet<>(FibonacciOperator.results).toArray(), 0, 20));
@@ -363,11 +367,12 @@ public class DelayOperatorTest
     });
     localCluster.run(60000);
 
-    System.out.println("RESULT: " + FibonacciOperator.results);
+    LOG.debug("RESULT: {}", FibonacciOperator.results);
     Assert.assertTrue("failure should be invoked", FailableDelayOperator.failureSimulated);
     Assert.assertArrayEquals(Arrays.copyOfRange(new TreeSet<>(Arrays.asList(FIBONACCI_NUMBERS)).toArray(), 0, 20),
         Arrays.copyOfRange(new TreeSet<>(FibonacciOperator.results).toArray(), 0, 20));
   }
 
+  private static final Logger LOG = LoggerFactory.getLogger(DelayOperatorTest.class);
 
 }
