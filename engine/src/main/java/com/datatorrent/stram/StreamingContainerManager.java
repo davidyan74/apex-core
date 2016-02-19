@@ -231,7 +231,16 @@ public class StreamingContainerManager implements PlanContext
   public static class CriticalPathInfo
   {
     long latency;
-    LinkedList<Integer> path = new LinkedList<Integer>();
+    LinkedList<Integer> path = new LinkedList<>();
+
+    @Override
+    protected Object clone() throws CloneNotSupportedException
+    {
+      CriticalPathInfo cpi = new CriticalPathInfo();
+      cpi.latency = this.latency;
+      cpi.path = (LinkedList<Integer>)this.path.clone();
+      return cpi;
+    }
   }
 
   private static class SetOperatorProperty implements Recoverable
@@ -909,9 +918,9 @@ public class StreamingContainerManager implements PlanContext
   {
     CriticalPathInfo result = null;
     List<PTOperator> leafOperators = plan.getLeafOperators();
+    Map<PTOperator, CriticalPathInfo> cache = new HashMap<>();
     for (PTOperator leafOperator : leafOperators) {
-      CriticalPathInfo cpi = new CriticalPathInfo();
-      findCriticalPathHelper(leafOperator, cpi);
+      CriticalPathInfo cpi = findCriticalPathHelper(leafOperator, cache);
       if (result == null || result.latency < cpi.latency) {
         result = cpi;
       }
@@ -919,14 +928,27 @@ public class StreamingContainerManager implements PlanContext
     return result;
   }
 
-  private void findCriticalPathHelper(PTOperator operator, CriticalPathInfo cpi)
+  private CriticalPathInfo findCriticalPathHelper(PTOperator operator, Map<PTOperator, CriticalPathInfo> cache)
   {
-    cpi.latency += operator.stats.getLatencyMA();
-    cpi.path.addFirst(operator.getId());
+    if (cache.containsKey(operator)) {
+      return cache.get(operator);
+    }
+    CriticalPathInfo cpi;
     PTOperator slowestUpstreamOperator = slowestUpstreamOp.get(operator);
     if (slowestUpstreamOperator != null) {
-      findCriticalPathHelper(slowestUpstreamOperator, cpi);
+      cpi = findCriticalPathHelper(slowestUpstreamOperator, cache);
+      try {
+        cpi = (CriticalPathInfo)cpi.clone();
+      } catch (CloneNotSupportedException ex) {
+        throw new RuntimeException();
+      }
+    } else {
+      cpi = new CriticalPathInfo();
     }
+    cpi.latency += operator.stats.getLatencyMA();
+    cpi.path.addLast(operator.getId());
+    cache.put(operator, cpi);
+    return cpi;
   }
 
   public int processEvents()
