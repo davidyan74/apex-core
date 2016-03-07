@@ -930,10 +930,10 @@ public class StreamingContainerManager implements PlanContext
 
   private CriticalPathInfo findCriticalPathHelper(PTOperator operator, Map<PTOperator, CriticalPathInfo> cache)
   {
-    if (cache.containsKey(operator)) {
-      return cache.get(operator);
+    CriticalPathInfo cpi = cache.get(operator);
+    if (cpi != null) {
+      return cpi;
     }
-    CriticalPathInfo cpi;
     PTOperator slowestUpstreamOperator = slowestUpstreamOp.get(operator);
     if (slowestUpstreamOperator != null) {
       cpi = findCriticalPathHelper(slowestUpstreamOperator, cache);
@@ -1540,8 +1540,11 @@ public class StreamingContainerManager implements PlanContext
               tuplesProcessed += s.tupleCount;
               endWindowStats.dequeueTimestamps.put(s.id, s.endWindowTimestamp);
 
-              Pair<Integer, String> operatorPortName = new Pair<Integer, String>(oper.getId(), s.id);
-              long lastEndWindowTimestamp = operatorPortLastEndWindowTimestamps.containsKey(operatorPortName) ? operatorPortLastEndWindowTimestamps.get(operatorPortName) : lastStatsTimestamp;
+              Pair<Integer, String> operatorPortName = new Pair<>(oper.getId(), s.id);
+              Long lastEndWindowTimestamp = operatorPortLastEndWindowTimestamps.get(operatorPortName);
+              if (lastEndWindowTimestamp == null) {
+                lastEndWindowTimestamp = lastStatsTimestamp;
+              }
               long portElapsedMillis = Math.max(s.endWindowTimestamp - lastEndWindowTimestamp, 0);
               //LOG.debug("=== PROCESSED TUPLE COUNT for {}: {}, {}, {}, {}", operatorPortName, s.tupleCount, portElapsedMillis, operatorPortLastEndWindowTimestamps.get(operatorPortName), lastStatsTimestamp);
               ps.tuplesPMSMA.add(s.tupleCount, portElapsedMillis);
@@ -1581,13 +1584,16 @@ public class StreamingContainerManager implements PlanContext
               ps.recordingId = s.recordingId;
 
               tuplesEmitted += s.tupleCount;
-              Pair<Integer, String> operatorPortName = new Pair<Integer, String>(oper.getId(), s.id);
-
-              long lastEndWindowTimestamp = operatorPortLastEndWindowTimestamps.containsKey(operatorPortName) ? operatorPortLastEndWindowTimestamps.get(operatorPortName) : lastStatsTimestamp;
+              Pair<Integer, String> operatorPortName = new Pair<>(oper.getId(), s.id);
+              Long lastEndWindowTimestamp = operatorPortLastEndWindowTimestamps.get(operatorPortName);
+              if (lastEndWindowTimestamp == null) {
+                lastEndWindowTimestamp = lastStatsTimestamp;
+              }
               long portElapsedMillis = Math.max(s.endWindowTimestamp - lastEndWindowTimestamp, 0);
               //LOG.debug("=== EMITTED TUPLE COUNT for {}: {}, {}, {}, {}", operatorPortName, s.tupleCount, portElapsedMillis, operatorPortLastEndWindowTimestamps.get(operatorPortName), lastStatsTimestamp);
               ps.tuplesPMSMA.add(s.tupleCount, portElapsedMillis);
               ps.bufferServerBytesPMSMA.add(s.bufferServerBytes, portElapsedMillis);
+
               operatorPortLastEndWindowTimestamps.put(operatorPortName, s.endWindowTimestamp);
               if (maxEndWindowTimestamp < s.endWindowTimestamp) {
                 maxEndWindowTimestamp = s.endWindowTimestamp;
