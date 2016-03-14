@@ -39,11 +39,11 @@ import com.ning.http.client.AsyncCompletionHandler;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClient.BoundRequestBuilder;
 import com.ning.http.client.AsyncHttpClientConfigBean;
-import com.ning.http.client.Cookie;
 import com.ning.http.client.Response;
-import com.ning.http.client.websocket.WebSocket;
-import com.ning.http.client.websocket.WebSocketTextListener;
-import com.ning.http.client.websocket.WebSocketUpgradeHandler;
+import com.ning.http.client.cookie.Cookie;
+import com.ning.http.client.ws.WebSocket;
+import com.ning.http.client.ws.WebSocketTextListener;
+import com.ning.http.client.ws.WebSocketUpgradeHandler;
 
 import com.datatorrent.api.Component;
 import com.datatorrent.api.Context;
@@ -85,11 +85,6 @@ public abstract class PubSubWebSocketClient implements Component<Context>
       } catch (IOException ex) {
         onError(ex);
       }
-    }
-
-    @Override
-    public void onFragment(String fragment, boolean last)
-    {
     }
 
     @Override
@@ -306,7 +301,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void publish(String topic, Object data) throws IOException
   {
     assertUsable();
-    connection.sendTextMessage(constructPublishMessage(topic, data, codec));
+    connection.sendMessage(constructPublishMessage(topic, data, codec));
   }
 
   /**
@@ -336,7 +331,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void subscribe(String topic) throws IOException
   {
     assertUsable();
-    connection.sendTextMessage(constructSubscribeMessage(topic, codec));
+    connection.sendMessage(constructSubscribeMessage(topic, codec));
   }
 
   /**
@@ -366,7 +361,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void unsubscribe(String topic) throws IOException
   {
     assertUsable();
-    connection.sendTextMessage(constructUnsubscribeMessage(topic, codec));
+    connection.sendMessage(constructUnsubscribeMessage(topic, codec));
   }
 
   /**
@@ -396,7 +391,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void subscribeNumSubscribers(String topic) throws IOException
   {
     assertUsable();
-    connection.sendTextMessage(constructSubscribeNumSubscribersMessage(topic, codec));
+    connection.sendMessage(constructSubscribeNumSubscribersMessage(topic, codec));
   }
 
   /**
@@ -426,7 +421,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void unsubscribeNumSubscribers(String topic) throws IOException
   {
     assertUsable();
-    connection.sendTextMessage(constructUnsubscribeNumSubscribersMessage(topic, codec));
+    connection.sendMessage(constructUnsubscribeNumSubscribersMessage(topic, codec));
   }
 
   /**
