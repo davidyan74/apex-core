@@ -20,7 +20,8 @@ package com.datatorrent.stram.util;
 
 import com.datatorrent.common.util.PubSubMessage;
 import com.datatorrent.common.util.PubSubWebSocketClient;
-import com.ning.http.client.ws.WebSocket;
+import com.datatorrent.common.util.WebSocketConnection;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -119,13 +120,12 @@ public class SharedPubSubWebSocketClient extends PubSubWebSocketClient
   }
 
   @Override
-  public void onOpen(WebSocket ws)
+  public void onOpen(WebSocketConnection ws)
   {
     for (String topic : topicHandlers.keySet()) {
       try {
         subscribe(topic);
-      }
-      catch (IOException ex) {
+      } catch (IOException ex) {
         LOG.warn("Cannot subscribe to {}", topic);
       }
     }
@@ -143,7 +143,7 @@ public class SharedPubSubWebSocketClient extends PubSubWebSocketClient
   }
 
   @Override
-  public void onClose(WebSocket ws)
+  public void onClose(WebSocketConnection ws)
   {
     for (Map.Entry<String, List<Handler>> entry : topicHandlers.entrySet()) {
       for (Handler handler : entry.getValue()) {

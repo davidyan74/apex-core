@@ -35,30 +35,31 @@ import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.AsyncHttpClient.BoundRequestBuilder;
-import com.ning.http.client.AsyncHttpClientConfigBean;
-import com.ning.http.client.Response;
-import com.ning.http.client.cookie.Cookie;
-import com.ning.http.client.ws.WebSocket;
-import com.ning.http.client.ws.WebSocketTextListener;
-import com.ning.http.client.ws.WebSocketUpgradeHandler;
+import org.apache.commons.io.IOUtils;
 
 import com.datatorrent.api.Component;
 import com.datatorrent.api.Context;
 import com.datatorrent.common.util.PubSubMessage.PubSubMessageType;
 import com.datatorrent.netlet.util.DTThrowable;
+import com.datatorrent.shaded.com.ning.http.client.AsyncCompletionHandler;
+import com.datatorrent.shaded.com.ning.http.client.AsyncHttpClient;
+import com.datatorrent.shaded.com.ning.http.client.AsyncHttpClient.BoundRequestBuilder;
+import com.datatorrent.shaded.com.ning.http.client.AsyncHttpClientConfigBean;
+import com.datatorrent.shaded.com.ning.http.client.Response;
+import com.datatorrent.shaded.com.ning.http.client.cookie.Cookie;
+import com.datatorrent.shaded.com.ning.http.client.ws.WebSocket;
+import com.datatorrent.shaded.com.ning.http.client.ws.WebSocketTextListener;
+import com.datatorrent.shaded.com.ning.http.client.ws.WebSocketUpgradeHandler;
 
 /**
- * <p>Abstract PubSubWebSocketClient class.</p>
+ * <p>Abstract PubSubWebSocketClient2 class.</p>
  *
  * @since 0.3.2
  */
 public abstract class PubSubWebSocketClient implements Component<Context>
 {
   private final AsyncHttpClient client;
-  private WebSocket connection;
+  private WebSocketConnection connection;
   private final ObjectMapper mapper;
   private final PubSubMessageCodec<Object> codec;
   private URI uri;
@@ -90,13 +91,13 @@ public abstract class PubSubWebSocketClient implements Component<Context>
     @Override
     public void onOpen(WebSocket ws)
     {
-      PubSubWebSocketClient.this.onOpen(ws);
+      PubSubWebSocketClient.this.onOpen(DefaultWebSocketConnection.getInstance(ws));
     }
 
     @Override
     public void onClose(WebSocket ws)
     {
-      PubSubWebSocketClient.this.onClose(ws);
+      PubSubWebSocketClient.this.onClose(DefaultWebSocketConnection.getInstance(ws));
     }
 
     @Override
@@ -108,7 +109,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   }
 
   /**
-   * <p>Constructor for PubSubWebSocketClient.</p>
+   * <p>Constructor for PubSubWebSocketClient2.</p>
    */
   public PubSubWebSocketClient()
   {
@@ -186,7 +187,8 @@ public abstract class PubSubWebSocketClient implements Component<Context>
         brb.addCookie(cookie);
       }
     }
-    connection = brb.execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new PubSubWebSocket()).build()).get(timeoutMillis, TimeUnit.MILLISECONDS);
+    connection = DefaultWebSocketConnection.getInstance(
+        brb.execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new PubSubWebSocket()).build()).get(timeoutMillis, TimeUnit.MILLISECONDS));
   }
 
   public void openConnectionAsync() throws IOException
@@ -215,7 +217,9 @@ public abstract class PubSubWebSocketClient implements Component<Context>
               brb.addCookie(cookie);
             }
           }
-          connection = brb.execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new PubSubWebSocket()).build()).get();
+          WebSocket webSocket =
+              brb.execute(new WebSocketUpgradeHandler.Builder().addWebSocketListener(new PubSubWebSocket()).build()).get();
+          connection = DefaultWebSocketConnection.getInstance(webSocket);
           return response;
         }
 
@@ -226,7 +230,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
         @Override
         public void onOpen(WebSocket ws)
         {
-          connection = ws;
+          connection = DefaultWebSocketConnection.getInstance(ws);
           super.onOpen(ws);
         }
       };
@@ -429,7 +433,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
    *
    * @param ws
    */
-  public abstract void onOpen(WebSocket ws);
+  public abstract void onOpen(WebSocketConnection ws);
 
   /**
    * <p>onMessage.</p>
@@ -445,7 +449,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
    *
    * @param ws
    */
-  public abstract void onClose(WebSocket ws);
+  public abstract void onClose(WebSocketConnection ws);
 
   @Override
   public void setup(Context context)
@@ -455,9 +459,8 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   @Override
   public void teardown()
   {
-    if (connection != null) {
-      connection.close();
-    }
+    IOUtils.closeQuietly(connection);
+
     if (client != null) {
       client.close();
     }
