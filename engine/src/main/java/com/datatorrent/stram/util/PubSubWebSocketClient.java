@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package com.datatorrent.common.util;
+package com.datatorrent.stram.util;
 
 import java.io.IOException;
 import java.net.URI;
@@ -47,7 +47,10 @@ import com.ning.http.client.ws.WebSocketUpgradeHandler;
 
 import com.datatorrent.api.Component;
 import com.datatorrent.api.Context;
-import com.datatorrent.common.util.PubSubMessage.PubSubMessageType;
+import com.datatorrent.common.util.JacksonObjectMapperProvider;
+import com.datatorrent.common.util.NameableThreadFactory;
+import com.datatorrent.common.util.PubSubMessage;
+import com.datatorrent.common.util.PubSubMessageCodec;
 import com.datatorrent.netlet.util.DTThrowable;
 
 /**
@@ -249,26 +252,6 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   }
 
   /**
-   * <p>constructPublishMessage.</p>
-   *
-   * @param <T>
-   * @param topic
-   * @param data
-   * @param codec
-   * @return publish message.
-   * @throws IOException
-   */
-  public static <T> String constructPublishMessage(String topic, T data, PubSubMessageCodec<T> codec) throws IOException
-  {
-    PubSubMessage<T> pubSubMessage = new PubSubMessage<T>();
-    pubSubMessage.setType(PubSubMessageType.PUBLISH);
-    pubSubMessage.setTopic(topic);
-    pubSubMessage.setData(data);
-
-    return codec.formatMessage(pubSubMessage);
-  }
-
-  /**
    * Before the websocket is used, it's recommended to call this method to ensure that
    * any exceptions caught while processing the messages received are acknowledged.
    * @throws IOException The reason because of which connection cannot be used.
@@ -301,25 +284,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void publish(String topic, Object data) throws IOException
   {
     assertUsable();
-    connection.sendMessage(constructPublishMessage(topic, data, codec));
-  }
-
-  /**
-   * <p>constructSubscribeMessage.</p>
-   *
-   * @param <T>
-   * @param topic
-   * @param codec
-   * @return subscribe message.
-   * @throws IOException
-   */
-  public static <T> String constructSubscribeMessage(String topic, PubSubMessageCodec<T> codec) throws IOException
-  {
-    PubSubMessage<T> pubSubMessage = new PubSubMessage<T>();
-    pubSubMessage.setType(PubSubMessageType.SUBSCRIBE);
-    pubSubMessage.setTopic(topic);
-
-    return codec.formatMessage(pubSubMessage);
+    connection.sendMessage(PubSubMessageCodec.constructPublishMessage(topic, data, codec));
   }
 
   /**
@@ -331,25 +296,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void subscribe(String topic) throws IOException
   {
     assertUsable();
-    connection.sendMessage(constructSubscribeMessage(topic, codec));
-  }
-
-  /**
-   * <p>constructUnsubscribeMessage.</p>
-   *
-   * @param <T>
-   * @param topic
-   * @param codec
-   * @return un-subscribe message.
-   * @throws IOException
-   */
-  public static <T> String constructUnsubscribeMessage(String topic, PubSubMessageCodec<T> codec) throws IOException
-  {
-    PubSubMessage<T> pubSubMessage = new PubSubMessage<T>();
-    pubSubMessage.setType(PubSubMessageType.UNSUBSCRIBE);
-    pubSubMessage.setTopic(topic);
-
-    return codec.formatMessage(pubSubMessage);
+    connection.sendMessage(PubSubMessageCodec.constructSubscribeMessage(topic, codec));
   }
 
   /**
@@ -361,25 +308,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void unsubscribe(String topic) throws IOException
   {
     assertUsable();
-    connection.sendMessage(constructUnsubscribeMessage(topic, codec));
-  }
-
-  /**
-   * <p>constructSubscribeNumSubscribersMessage.</p>
-   *
-   * @param <T>
-   * @param topic
-   * @param codec
-   * @return subscribe num subscriber message.
-   * @throws IOException
-   */
-  public static <T> String constructSubscribeNumSubscribersMessage(String topic, PubSubMessageCodec<T> codec) throws IOException
-  {
-    PubSubMessage<T> pubSubMessage = new PubSubMessage<T>();
-    pubSubMessage.setType(PubSubMessageType.SUBSCRIBE_NUM_SUBSCRIBERS);
-    pubSubMessage.setTopic(topic);
-
-    return codec.formatMessage(pubSubMessage);
+    connection.sendMessage(PubSubMessageCodec.constructUnsubscribeMessage(topic, codec));
   }
 
   /**
@@ -391,25 +320,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void subscribeNumSubscribers(String topic) throws IOException
   {
     assertUsable();
-    connection.sendMessage(constructSubscribeNumSubscribersMessage(topic, codec));
-  }
-
-  /**
-   * <p>constructUnsubscribeNumSubscribersMessage.</p>
-   *
-   * @param <T>
-   * @param topic
-   * @param codec
-   * @return un-subscribe num subscribers message.
-   * @throws IOException
-   */
-  public static <T> String constructUnsubscribeNumSubscribersMessage(String topic, PubSubMessageCodec<T> codec) throws IOException
-  {
-    PubSubMessage<T> pubSubMessage = new PubSubMessage<T>();
-    pubSubMessage.setType(PubSubMessageType.UNSUBSCRIBE_NUM_SUBSCRIBERS);
-    pubSubMessage.setTopic(topic);
-
-    return codec.formatMessage(pubSubMessage);
+    connection.sendMessage(PubSubMessageCodec.constructSubscribeNumSubscribersMessage(topic, codec));
   }
 
   /**
@@ -421,7 +332,7 @@ public abstract class PubSubWebSocketClient implements Component<Context>
   public void unsubscribeNumSubscribers(String topic) throws IOException
   {
     assertUsable();
-    connection.sendMessage(constructUnsubscribeNumSubscribersMessage(topic, codec));
+    connection.sendMessage(PubSubMessageCodec.constructUnsubscribeNumSubscribersMessage(topic, codec));
   }
 
   /**

@@ -19,7 +19,7 @@
 package com.datatorrent.stram.util;
 
 import com.datatorrent.common.util.PubSubMessage;
-import com.datatorrent.common.util.PubSubWebSocketClient;
+
 import com.ning.http.client.ws.WebSocket;
 import java.io.IOException;
 import java.net.URI;

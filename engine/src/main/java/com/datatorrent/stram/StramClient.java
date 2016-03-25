@@ -129,7 +129,6 @@ public class StramClient
       com.datatorrent.api.StreamCodec.class,
       com.datatorrent.common.util.FSStorageAgent.class,
       javax.validation.ConstraintViolationException.class,
-      com.ning.http.client.ws.WebSocketUpgradeHandler.class,
       com.esotericsoftware.kryo.Kryo.class,
       org.apache.bval.jsr303.ApacheValidationProvider.class,
       org.apache.bval.BeanValidationContext.class,
