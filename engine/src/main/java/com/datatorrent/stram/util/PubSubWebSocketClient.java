@@ -35,15 +35,15 @@ import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.AsyncHttpClient.BoundRequestBuilder;
-import com.ning.http.client.AsyncHttpClientConfigBean;
-import com.ning.http.client.Response;
-import com.ning.http.client.cookie.Cookie;
-import com.ning.http.client.ws.WebSocket;
-import com.ning.http.client.ws.WebSocketTextListener;
-import com.ning.http.client.ws.WebSocketUpgradeHandler;
+import org.apache.apex.shaded.ning19.com.ning.http.client.AsyncCompletionHandler;
+import org.apache.apex.shaded.ning19.com.ning.http.client.AsyncHttpClient;
+import org.apache.apex.shaded.ning19.com.ning.http.client.AsyncHttpClient.BoundRequestBuilder;
+import org.apache.apex.shaded.ning19.com.ning.http.client.AsyncHttpClientConfigBean;
+import org.apache.apex.shaded.ning19.com.ning.http.client.Response;
+import org.apache.apex.shaded.ning19.com.ning.http.client.cookie.Cookie;
+import org.apache.apex.shaded.ning19.com.ning.http.client.ws.WebSocket;
+import org.apache.apex.shaded.ning19.com.ning.http.client.ws.WebSocketTextListener;
+import org.apache.apex.shaded.ning19.com.ning.http.client.ws.WebSocketUpgradeHandler;
 
 import com.datatorrent.api.Component;
 import com.datatorrent.api.Context;

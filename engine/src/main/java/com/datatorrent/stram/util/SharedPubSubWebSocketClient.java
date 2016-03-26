@@ -20,13 +20,15 @@ package com.datatorrent.stram.util;
 
 import com.datatorrent.common.util.PubSubMessage;
 
-import com.ning.http.client.ws.WebSocket;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
+import org.apache.apex.shaded.ning19.com.ning.http.client.ws.WebSocket;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -134,6 +134,7 @@ public class StramClient
       org.apache.bval.BeanValidationContext.class,
       org.apache.commons.lang3.ClassUtils.class,
       net.engio.mbassy.bus.MBassador.class,
+      org.apache.apex.shaded.ning19.com.ning.http.client.ws.WebSocketUpgradeHandler.class,
       org.codehaus.jackson.annotate.JsonUnwrapped.class,
       org.codehaus.jackson.map.ser.std.RawSerializer.class,
       org.apache.commons.beanutils.BeanUtils.class,
