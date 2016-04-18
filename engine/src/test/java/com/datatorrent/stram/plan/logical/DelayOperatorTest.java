@@ -37,6 +37,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.yarn.util.Clock;
 import org.apache.hadoop.yarn.util.SystemClock;
@@ -326,6 +328,7 @@ public class DelayOperatorTest
   @Test
   public void testFibonacciRecovery1() throws Exception
   {
+    LOG.info("### testFibonacciRecovery1");
     LogicalPlan dag = StramTestSupport.createDAG(testMeta);
 
     TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
@@ -360,6 +363,7 @@ public class DelayOperatorTest
   @Test
   public void testFibonacciRecovery2() throws Exception
   {
+    LOG.info("### testFibonacciRecovery2");
     LogicalPlan dag = StramTestSupport.createDAG(testMeta);
 
     TestGeneratorInputOperator dummyInput = dag.addOperator("DUMMY", TestGeneratorInputOperator.class);
@@ -472,4 +476,5 @@ public class DelayOperatorTest
     dag.validate();
   }
 
+  private static final Logger LOG = LoggerFactory.getLogger(DelayOperatorTest.class);
 }
