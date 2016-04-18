@@ -82,12 +82,14 @@ public class DelayOperatorTest
   public void setup()
   {
     sequential.lock();
+    LOG.info("### LOCKED");
   }
 
   @After
   public void teardown()
   {
     sequential.unlock();
+    LOG.info("### UNLOCKED");
   }
 
   @Test
