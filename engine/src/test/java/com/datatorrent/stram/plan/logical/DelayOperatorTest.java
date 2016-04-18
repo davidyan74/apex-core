@@ -357,6 +357,9 @@ public class DelayOperatorTest
       }
     });
     localCluster.run(60000);
+    if (!FailableFibonacciOperator.failureSimulated) {
+      LOG.error("####### Failure not simulated {}", FailableFibonacciOperator.results.size());
+    }
     Assert.assertTrue("failure should be invoked", FailableFibonacciOperator.failureSimulated);
     Assert.assertArrayEquals(Arrays.copyOfRange(new TreeSet<>(Arrays.asList(FIBONACCI_NUMBERS)).toArray(), 0, 20),
         Arrays.copyOfRange(new TreeSet<>(FibonacciOperator.results).toArray(), 0, 20));
@@ -392,7 +395,9 @@ public class DelayOperatorTest
       }
     });
     localCluster.run(60000);
-
+    if (!FailableDelayOperator.failureSimulated) {
+      LOG.error("####### Failure not simulated {}", FibonacciOperator.results.size());
+    }
     Assert.assertTrue("failure should be invoked", FailableDelayOperator.failureSimulated);
     Assert.assertArrayEquals(Arrays.copyOfRange(new TreeSet<>(Arrays.asList(FIBONACCI_NUMBERS)).toArray(), 0, 20),
         Arrays.copyOfRange(new TreeSet<>(FibonacciOperator.results).toArray(), 0, 20));
