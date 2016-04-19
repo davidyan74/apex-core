@@ -250,7 +250,7 @@ public class DelayOperatorTest
     @Override
     public void committed(long windowId)
     {
-      LOG.info("###### committed");
+      LOG.info("###### committed FailableFibonacciOperator");
       committed = true;
     }
 
@@ -290,6 +290,7 @@ public class DelayOperatorTest
     @Override
     public void committed(long windowId)
     {
+      LOG.info("###### committed FailableDelayOperator");
       committed = true;
     }
 
