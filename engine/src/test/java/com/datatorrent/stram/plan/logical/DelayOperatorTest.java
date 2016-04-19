@@ -250,6 +250,7 @@ public class DelayOperatorTest
     @Override
     public void committed(long windowId)
     {
+      LOG.info("###### committed");
       committed = true;
     }
 
