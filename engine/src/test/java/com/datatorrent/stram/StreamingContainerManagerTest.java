@@ -923,6 +923,7 @@ public class StreamingContainerManagerTest
   public void testAppDataPush() throws Exception
   {
     System.out.println("##################### ENV: " + System.getenv());
+    System.out.println("##################### PROP: " + System.getProperty("travis"));
     if (StramTestSupport.isInTravis()) {
       // disable this test in travis because of an intermittent problem similar to this:
       // http://stackoverflow.com/questions/32172925/travis-ci-sporadic-timeouts-to-localhost
