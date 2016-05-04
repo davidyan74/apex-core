@@ -927,6 +927,7 @@ public class StreamingContainerManagerTest
       // disable this test in travis because of an intermittent problem similar to this:
       // http://stackoverflow.com/questions/32172925/travis-ci-sporadic-timeouts-to-localhost
       // We should remove this when we find a solution to this.
+      System.out.println("TEST DISABLED");
       return;
     }
     final String topic = "xyz";
