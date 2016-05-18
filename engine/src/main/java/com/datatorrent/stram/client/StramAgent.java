@@ -20,15 +20,16 @@ package com.datatorrent.stram.client;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.UriBuilder;
-
-import com.sun.jersey.api.client.Client;
-import com.sun.jersey.api.client.ClientResponse;
 
 import org.apache.hadoop.yarn.api.records.YarnApplicationState;
 import org.codehaus.jettison.json.JSONException;
@@ -45,21 +46,25 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.records.ApplicationReport;
 import org.apache.hadoop.yarn.client.api.YarnClient;
+import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.ConverterUtils;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.sun.jersey.api.client.ClientHandlerException;
+import com.sun.jersey.api.client.ClientResponse;
 
 import com.datatorrent.stram.client.WebServicesVersionConversion.IncompatibleVersionException;
 import com.datatorrent.stram.client.WebServicesVersionConversion.VersionConversionFilter;
 import com.datatorrent.stram.security.StramWSFilter;
 import com.datatorrent.stram.util.HeaderClientFilter;
-import com.datatorrent.stram.util.LRUCache;
 import com.datatorrent.stram.util.WebServicesClient;
 import com.datatorrent.stram.webapp.WebServices;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.sun.jersey.api.client.ClientHandlerException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * <p>Abstract StramAgent class.</p>
@@ -73,6 +78,10 @@ public class StramAgent extends FSAgent
 
   private static class StramWebServicesInfo
   {
+    private StramWebServicesInfo()
+    {
+    }
+
     StramWebServicesInfo(String appMasterTrackingUrl, String version, String appPath, String user, String secToken, JSONObject permissionsInfo)
     {
       this.appMasterTrackingUrl = appMasterTrackingUrl;
@@ -101,6 +110,10 @@ public class StramAgent extends FSAgent
     String user;
     SecurityInfo securityInfo;
     PermissionsInfo permissionsInfo;
+
+    static final StramWebServicesInfo INVALID = new StramWebServicesInfo();
+    static final StramWebServicesInfo PENDING = new StramWebServicesInfo();
+
   }
 
   private static class SecurityInfo
@@ -125,8 +138,28 @@ public class StramAgent extends FSAgent
   }
 
   private static final Logger LOG = LoggerFactory.getLogger(StramAgent.class);
-  protected String resourceManagerWebappAddress;
-  private final Map<String, StramWebServicesInfo> webServicesInfoMap = new LRUCache<String, StramWebServicesInfo>(100, true);
+
+  private final Cache<String, StramWebServicesInfo> webServicesInfoMap = CacheBuilder.newBuilder()
+      .concurrencyLevel(1)
+      .maximumSize(1000)
+      .refreshAfterWrite(1, TimeUnit.SECONDS)
+      .build(new CacheLoader<String, StramWebServicesInfo>()
+      {
+        public StramWebServicesInfo load(String appId)
+        {
+          return retrieveWebServicesInfo(appId);
+        }
+
+        public ListenableFuture<StramWebServicesInfo> reload(final String appId, StramWebServicesInfo prevInfo)
+        {
+          if (prevInfo == StramWebServicesInfo.PENDING) {
+            return Futures.immediateFuture(this.load(appId));
+          } else {
+            return Futures.immediateFuture(prevInfo);
+          }
+        }
+      });
+
   protected String defaultStramRoot = null;
   protected Configuration conf;
 
@@ -161,7 +194,7 @@ public class StramAgent extends FSAgent
 
   private synchronized void deleteCachedWebServicesInfo(String appid)
   {
-    webServicesInfoMap.remove(appid);
+    webServicesInfoMap.invalidate(appid);
   }
 
   private synchronized void setCachedWebServicesInfo(String appid, StramWebServicesInfo info)
@@ -171,7 +204,7 @@ public class StramAgent extends FSAgent
 
   private synchronized StramWebServicesInfo getCachedWebServicesInfo(String appid)
   {
-    return webServicesInfoMap.get(appid);
+    return webServicesInfoMap.getIfPresent(appid);
   }
 
   private StramWebServicesInfo getWebServicesInfo(String appid)
@@ -179,9 +212,7 @@ public class StramAgent extends FSAgent
     StramWebServicesInfo info = getCachedWebServicesInfo(appid);
     if ((info == null) || checkSecExpiredToken(appid, info)) {
       info = retrieveWebServicesInfo(appid);
-      if (info != null) {
-        setCachedWebServicesInfo(appid, info);
-      }
+      setCachedWebServicesInfo(appid, info);
     }
     return info;
   }
@@ -189,13 +220,13 @@ public class StramAgent extends FSAgent
   public String getWebServicesVersion(String appid)
   {
     StramWebServicesInfo info = getWebServicesInfo(appid);
-    return info == null ? null : info.version;
+    return info.version;
   }
 
   public PermissionsInfo getPermissionsInfo(String appid)
   {
     StramWebServicesInfo info = getWebServicesInfo(appid);
-    return info == null ? null : info.permissionsInfo;
+    return info.permissionsInfo;
   }
 
   private UriBuilder getStramWebURIBuilder(WebServicesClient webServicesClient, String appid) throws IncompatibleVersionException
@@ -204,7 +235,7 @@ public class StramAgent extends FSAgent
     webServicesClient.clearFilters();
     StramWebServicesInfo info = getWebServicesInfo(appid);
     UriBuilder ub = null;
-    if (info != null) {
+    if (info.appMasterTrackingUrl != null) {
       //ws = wsClient.resource("http://" + info.appMasterTrackingUrl).path(WebServices.PATH).path(info.version).path("stram");
       // the filter should convert to the right version
       ub = UriBuilder.fromUri("http://" + info.appMasterTrackingUrl).path(WebServices.PATH).path(WebServices.VERSION).path("stram");
@@ -316,15 +347,28 @@ public class StramAgent extends FSAgent
   {
     StramWebServicesInfo info = getWebServicesInfo(appId);
     // TODO: when we upgrade hadoop dependency to 2.4, we need to save app path as a tag
-    return info == null ? getAppsRoot() + "/" + appId : info.appPath;
+    return info.appPath == null ? getAppsRoot() + "/" + appId : info.appPath;
   }
 
   // Note that this method only works if the app is running.  We might want to deprecate this method.
   public String getUser(String appid)
   {
     StramWebServicesInfo info = getWebServicesInfo(appid);
-    return info == null ? null : info.user;
+    return info.user;
   }
+
+  private static boolean isApplicationStatePending(YarnApplicationState state)
+  {
+    return state == YarnApplicationState.ACCEPTED || state == YarnApplicationState.NEW ||
+        state == YarnApplicationState.NEW_SAVING || state == YarnApplicationState.SUBMITTED;
+  }
+
+  private static boolean isApplicationStateTerminated(YarnApplicationState state)
+  {
+    return state == YarnApplicationState.FAILED || state == YarnApplicationState.KILLED ||
+        state == YarnApplicationState.FINISHED;
+  }
+
 
   private StramWebServicesInfo retrieveWebServicesInfo(String appId)
   {
@@ -337,34 +381,32 @@ public class StramAgent extends FSAgent
       ApplicationReport ar = yarnClient.getApplicationReport(ConverterUtils.toApplicationId(appId));
       if (ar == null) {
         LOG.warn("YARN does not have record for this application {}", appId);
-        return null;
-      } else if (ar.getYarnApplicationState() != YarnApplicationState.RUNNING) {
-        LOG.debug("Application {} is not running (state: {})", appId, ar.getYarnApplicationState());
-        return null;
+        return StramWebServicesInfo.INVALID;
+      } else if (isApplicationStatePending(ar.getYarnApplicationState())) {
+        return StramWebServicesInfo.PENDING;
+      } else if (isApplicationStateTerminated(ar.getYarnApplicationState())) {
+        return StramWebServicesInfo.INVALID;
       }
 
       String trackingUrl = ar.getTrackingUrl();
-      if (!trackingUrl.startsWith("http://")
-              && !trackingUrl.startsWith("https://")) {
+      if (StringUtils.isBlank(trackingUrl)) {
+        LOG.error("Cannot get tracking url from YARN");
+        return StramWebServicesInfo.PENDING;
+      } else if (!trackingUrl.startsWith("http://")
+          && !trackingUrl.startsWith("https://")) {
         url = "http://" + trackingUrl;
-      }
-      else {
+      } else {
         url = trackingUrl;
       }
-      if (StringUtils.isBlank(url)) {
-        LOG.error("Cannot get tracking url from YARN");
-        return null;
-      }
+
       if (url.endsWith("/")) {
         url = url.substring(0, url.length() - 1);
       }
       url += WebServices.PATH;
-    }
-    catch (Exception ex) {
+    } catch (YarnException | IOException ex) {
       LOG.error("Caught exception when retrieving web services info", ex);
-      return null;
-    }
-    finally {
+      return StramWebServicesInfo.PENDING;
+    } finally {
       yarnClient.stop();
     }
 
@@ -390,7 +432,7 @@ public class StramAgent extends FSAgent
         url = val.substring(index + 4);
         if (i++ > MAX_REDIRECTS) {
           LOG.error("Cannot get web service info -- exceeded the max number of redirects");
-          return null;
+          return StramWebServicesInfo.INVALID;
         }
       }
 
@@ -433,7 +475,7 @@ public class StramAgent extends FSAgent
     }
     catch (Exception ex) {
       LOG.warn("Caught exception when retrieving web service info for app {}", appId, ex);
-      return null;
+      return StramWebServicesInfo.PENDING;
     }
   }
 
